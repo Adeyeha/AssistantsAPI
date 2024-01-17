@@ -27,7 +27,7 @@ if "thread_id" not in st.session_state:
     st.session_state.thread_id = None
 
 # Set up the Streamlit page with a title and icon
-st.set_page_config(page_title="ChatGPT-like Chat App", page_icon=":speech_balloon:")
+st.set_page_config(page_title="MyAI Onboarding Agent", page_icon=":speech_balloon:")
 
 # Define functions for scraping, converting text to PDF, and uploading to OpenAI
 def scrape_website(url):
@@ -46,7 +46,7 @@ def text_to_pdf(text, filename):
 def upload_to_openai(filepath):
     """Upload a file to OpenAI and return its file ID."""
     with open(filepath, "rb") as file:
-        response = openai.files.create(file=file.read(), purpose="assistants")
+        response = client.files.create(file=file.read(), purpose="assistants")
     return response.id
 
 # Create a sidebar for API key configuration and additional features
@@ -68,7 +68,7 @@ username = st.sidebar.text_input("User Name", key="username")
 #     #st.sidebar.write(f"File ID: {file_id}")
 
 # Sidebar option for users to upload their own files
-uploaded_file = st.sidebar.file_uploader("Upload a file to OpenAI embeddings", key="file_uploader")
+uploaded_file = st.sidebar.file_uploader("Upload an onboarding file", key="file_uploader")
 
 # Button to upload a user's file and store the file ID
 if st.sidebar.button("Upload File"):
@@ -130,8 +130,7 @@ def process_message_with_citations(message):
 
 
 # Main chat interface setup
-st.title("OpenAI Assistants API Chat")
-st.write("This is a simple chat application that uses OpenAI's API to generate responses.")
+st.title("MyAI Onboarding Agent")
 
 # Only show the chat interface if the chat has been started
 if st.session_state.start_chat:
@@ -164,8 +163,13 @@ if st.session_state.start_chat:
         run = client.beta.threads.runs.create(
             thread_id=st.session_state.thread_id,
             assistant_id=assistant_id,
-            instructions="Please answer the queries using the knowledge provided in the files.When adding other information mark it clearly as such.with a different color"
-        )
+            instructions=f"""You are a multi-lingual, delightful and witty onboarding assistant for MyAI app. 
+            You are funny and full of personality. You are to guide users through a step-by-step onboarding process on the app, one step at a time, 
+            and also answer questions relating to the app. MyAI is a personal assistant app. You are MyAI. 
+            The details you need are in the knowledge provided in the files. Only answer questions relating to the app.
+            You are responding to {username}.
+            """
+                    )
 
         # Poll for the run to complete and retrieve the assistant's messages
         while run.status != 'completed':
