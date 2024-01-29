@@ -3,3 +3,7 @@ beautifulsoup4
 streamlit
 pdfkit
 python-dotenv
+python-jose[cryptography]
+fastapi
+python-multipart
+uvicorn
