@@ -4,20 +4,40 @@ import streamlit as st
 import time
 import os
 from dotenv import load_dotenv
+import json
+# from ..functions import reminder
 load_dotenv()
 
 
+
 # Set your OpenAI Assistant ID here
-assistant_id = os.getenv('ASSISTANT_ID')
+assistant_id = os.getenv('REGULAR_ASSISTANT_ID')
 
 # Initialize the OpenAI client (ensure to set your API key in the sidebar within the app)
 client = openai.Client(api_key=os.getenv('OPENAI_KEY'))
+
+# Functions
+class Functions():
+    def SetReminder(self, task, date, email):
+        print(f"SetReminder --> task: {task}, date: {date}, email: {email}")
+        return True
+
+    def SetupMeeting(self, agenda, invitee_email, date):
+        print(f"SetupMeeting --> agenda: {agenda}, invitee_email: {invitee_email}, date: {date}")
+        return True   
+
+    def Shop(self, item, details, pricecap, website):
+        print(f"Shopping --> item: {item}, details: {details}, pricecap: {pricecap}, website: {website}")
+        return True     
+
+call = Functions()
 
 # Get or Create Thread
 def get_thread():
     if "thread_id" not in st.session_state:
         thread = client.beta.threads.create()
         st.session_state.thread_id = thread.id
+
 
 def process_message(user_prompt,system_prompt):
     # Add message to thread
@@ -35,9 +55,38 @@ def process_message(user_prompt,system_prompt):
     )
     return run
 
+
+def process_tools(run,thread_id):
+    result = []
+    for task in run.required_action.submit_tool_outputs.tool_calls:
+        function_name = task.function.name
+        params = json.loads(task.function.arguments)
+        
+        # Get the function object using getattr
+        func = getattr(call, function_name)
+        
+        # Call the function with the parameters
+        result.append({
+                    "tool_call_id": task.id,
+                    "output": func(**params)
+                    })
+
+    run = client.beta.threads.runs.submit_tool_outputs(
+        thread_id=thread_id,
+        run_id=run.id,
+        tool_outputs=result,
+    )
+    return run
+
+
+
 def get_generated_response(run):
     # Poll for the run to complete and retrieve the assistant's messages
     while run.status != 'completed':
+
+        if run.status == 'requires_action':
+            run = process_tools(run,st.session_state.thread_id)
+
         time.sleep(1)
         run = client.beta.threads.runs.retrieve(
             thread_id=st.session_state.thread_id,
