@@ -24,7 +24,7 @@ class Functions():
 
     def SetupMeeting(self, agenda, invitee_email, date):
         print(f"SetupMeeting --> agenda: {agenda}, invitee_email: {invitee_email}, date: {date}")
-        return True   
+        return True
 
     def Shop(self, item, details, pricecap, website):
         print(f"Shopping --> item: {item}, details: {details}, pricecap: {pricecap}, website: {website}")

@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 from typing import Annotated, Union, List, Dict
 import time
 import os
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 from openai import OpenAI
 import json
 
@@ -13,7 +13,7 @@ import json
 
 # FastAPI app initialization
 app = FastAPI()
-load_dotenv()
+# load_dotenv()
 
 # Load API key from environment variable
 api_key = os.getenv('API_KEY')
