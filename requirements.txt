@@ -3,12 +3,8 @@ beautifulsoup4
 streamlit
 pdfkit
 python-dotenv
-python-jose[cryptography]
+python-jose
 fastapi
 python-multipart
 uvicorn
 
-
-## GOOGLE
-# fuzzywuzzy[speedup]
-# googletrans

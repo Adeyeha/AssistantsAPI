@@ -1,2 +1,9 @@
 env/
 .env
+.git*
+**/*.pyc
+.venv/
+old/
+apps/
+.vscode/
+__pycache__/
