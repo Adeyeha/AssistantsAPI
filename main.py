@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, Body, UploadFile, Security, File
 from fastapi.security.api_key import APIKeyHeader
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Annotated, Union, List, Dict
 import time
@@ -10,10 +11,26 @@ import json
 
 
 ###################################################### GENERAL CONFIG ###########################################################
+# load_dotenv()
+
 
 # FastAPI app initialization
 app = FastAPI()
-# load_dotenv()
+
+origins = [
+    "http://localhost",
+    "http://maya-ai.azurewebsites.net"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 
 # Load API key from environment variable
 api_key = os.getenv('API_KEY')
