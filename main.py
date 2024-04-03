@@ -1,17 +1,23 @@
-from fastapi import FastAPI, Depends, HTTPException, Body, UploadFile, Security, File
+from fastapi import FastAPI, Depends, HTTPException, Body, UploadFile, Security, File, Form
 from fastapi.security.api_key import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel, Field
-from typing import Annotated, Union, List, Dict
+from typing import Annotated, Union, List, Dict, Optional
 import time
 import os
-# from dotenv import load_dotenv
+from dotenv import load_dotenv
 from openai import OpenAI
 import json
+import shutil
+import aiofiles
+import io
+
+# from pydub import AudioSegment
 
 
 ###################################################### GENERAL CONFIG ###########################################################
-# load_dotenv()
+load_dotenv()
 
 
 # FastAPI app initialization
@@ -104,6 +110,24 @@ class UpdatedAssistant(BaseModel):
     created_at: int = Field(description="Updated time", examples=["1705437972"])
     file_ids: list = Field(description="List of uploaded files to be used for information retrieval", examples=[['file-Wr9ZSW3au6kjKBl398wqD47P']])
 
+class VoiceMessage(BaseModel):
+    username: str = Field(description="User's username.")
+    age: int = Field(gt=0, description="User's age.")
+    gender: str = Field(description="User's gender.")
+    country: str = Field(description="User's country.")
+    thread_id: str = Field(description="ID of the message thread to manage messages per user.")
+    response_type: str = Field(description="Response Type, can either be voice or text") 
+    agent: Optional[str] = Field(description="Agent Voice for OpenAI.") 
+
+
+class VoiceMessageForm(BaseModel):
+    username: str = Form(description="User's username.")
+    age: int = Form(gt=0, description="User's age.")
+    gender: str = Form(description="User's gender.")
+    country: str = Form(description="User's country.")
+    thread_id: str = Form(description="ID of the message thread to manage messages per user.")
+    response_type: str = Form(description="Response Type, can either be voice or text") 
+    agent: Optional[str] = Form(description="Agent Voice for OpenAI.")
 
 # Building blocks
 def create_openai_file(file_bytes, purpose="assistants"):
@@ -210,6 +234,14 @@ def retrieve_message_response_on_openai_assistant(run, thread_id):
     )
     return [message.content[0].text.value for message in messages if message.run_id == run.id and message.role == "assistant"][0]
 
+
+async def process_chatbot_openai(thread_id,user_prompt,username,age,gender,country,instructions,assistant_id):
+    resp = create_message_on_openai_assistant(thread_id, user_prompt)
+    run = process_message_on_openai_assistant(thread_id, username, age, gender, country, instructions, assistant_id)
+    run = check_message_processing_status_on_openai_assistant(run, thread_id)
+    response_message = retrieve_message_response_on_openai_assistant(run, thread_id)
+    return response_message
+
 # Routes
 @app.post("/create-thread", status_code=201, response_model=Thread, tags=["General Config"])
 async def create_assistant_thread(auth: bool = Depends(is_authenticated)):
@@ -220,13 +252,13 @@ async def create_assistant_thread(auth: bool = Depends(is_authenticated)):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# ####################################################### GENERAL ASSISTANT CONFIG ENDS ########################################################
+######################################################### GENERAL ASSISTANT CONFIG ENDS ########################################################
 
 
 
 
 
-########################################################## ONBOARDING BOT ########################################################
+################################################################ ONBOARDING BOT ###############################################################
 
 # Routes
 @app.post("/onboarding-send-message", status_code=201, response_model=MessageCompletion, tags=["Onboarding Bot"])
@@ -253,10 +285,13 @@ async def onboarding_send_message_and_get_response(
         and also answer questions relating to the app. MyAI is a personal assistant app. You are MyAI. 
         The details you need are in the knowledge provided in the files. Only answer questions relating to the app.
         """
-        resp = create_message_on_openai_assistant(message.thread_id, message.user_prompt)
-        run = process_message_on_openai_assistant(message.thread_id, message.username, message.age, message.gender, message.country, instructions, onboarding_assistant_id)
-        run = check_message_processing_status_on_openai_assistant(run, message.thread_id)
-        response_message = retrieve_message_response_on_openai_assistant(run, message.thread_id)
+        # resp = create_message_on_openai_assistant(message.thread_id, message.user_prompt)
+        # run = process_message_on_openai_assistant(message.thread_id, message.username, message.age, message.gender, message.country, instructions, onboarding_assistant_id)
+        # run = check_message_processing_status_on_openai_assistant(run, message.thread_id)
+        # response_message = retrieve_message_response_on_openai_assistant(run, message.thread_id)
+
+        response_message = await process_chatbot_openai(message.thread_id, message.user_prompt, message.username, message.age, message.gender, message.country, instructions, onboarding_assistant_id)
+
         return MessageCompletion(completion=response_message)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -305,10 +340,13 @@ async def conversational_send_message_and_get_response(
         You are emotionally intelligent, so you can detect when they are going through a rough patch and provide some encouragement. 
         you would also keep your answers short, except when asked to provide details.
         """
-        resp = create_message_on_openai_assistant(message.thread_id, message.user_prompt)
-        run = process_message_on_openai_assistant(message.thread_id, message.username, message.age, message.gender, message.country, instructions, regular_assistant_id)
-        run = check_message_processing_status_on_openai_assistant(run, message.thread_id)
-        response_message = retrieve_message_response_on_openai_assistant(run, message.thread_id)
+        # resp = create_message_on_openai_assistant(message.thread_id, message.user_prompt)
+        # run = process_message_on_openai_assistant(message.thread_id, message.username, message.age, message.gender, message.country, instructions, regular_assistant_id)
+        # run = check_message_processing_status_on_openai_assistant(run, message.thread_id)
+        # response_message = retrieve_message_response_on_openai_assistant(run, message.thread_id)
+
+        response_message = await process_chatbot_openai(message.thread_id, message.user_prompt, message.username, message.age, message.gender, message.country, instructions, regular_assistant_id)
+
         return MessageCompletion(completion=response_message)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -316,6 +354,73 @@ async def conversational_send_message_and_get_response(
 
 ########################################################## REGULAR BOT ENDS ##########################################################
 
+
+
+
+
+
+########################################################### ASSISTANT VOICE ##########################################################
+
+# Routes
+@app.post("/voice-conversational-send-message", status_code=201, response_model=MessageCompletion, tags=["Conversational Bot"])
+async def voice_conversational_send_message_and_get_response(
+    username: Annotated[str, Form(..., description="User's username")],
+    age: Annotated[int, Form(..., description="User's age")],
+    gender: Annotated[str, Form(..., description="User's gender")],
+    country: Annotated[str, Form(..., description="User's country")],
+    thread_id: Annotated[str, Form(..., description="ID of the message thread")],
+    response_type: Annotated[str, Form(description="Response Type, can either be voice or text")],
+    agent: Annotated[str, Form(description="Agent Voice for OpenAI")],
+    voice: UploadFile = File(...),
+    auth: bool = Depends(is_authenticated)):
+    try:
+        instructions = """You are delightful and witty personal assistant.  You are funny and full of personality. 
+        you care about your principal and would always ask personal questions such as but not limited to questions about their day, what they had for food, etc. 
+        You are emotionally intelligent, so you can detect when they are going through a rough patch and provide some encouragement. 
+        you would also keep your answers short, except when asked to provide details.
+        """
+
+        filepath = os.path.join("media/transcribe",voice.filename)
+        outpath = os.path.join("media/out",voice.filename)
+
+        # Save the uploaded voice file temporarily
+        async with aiofiles.open(filepath,mode='wb') as out_file:
+            content = await voice.read()  # async read
+            await out_file.write(content)  # async write
+
+            # Open the saved audio file
+            with open(out_file.name, 'rb') as audio_file:
+                # Pass the audio file to the OpenAI transcription API
+                transcription = openai_client.audio.transcriptions.create(
+                    model="whisper-1", 
+                    file=audio_file
+                )
+
+        response_message = await process_chatbot_openai(thread_id, transcription.text, username, age, gender, country, instructions, regular_assistant_id)
+
+        if response_type == "text":
+            return MessageCompletion(completion=response_message)
+        elif response_type == "voice":
+
+            response = openai_client.audio.speech.create(
+                model="tts-1",
+                voice="alloy",
+                input=response_message
+                )
+            
+            response.stream_to_file(outpath)
+            
+            return FileResponse(outpath, media_type="audio/mpeg", filename="output.mp3")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+
+
+
+
+########################################################### ASSISTANT VOICE ENDS ##########################################################
+    
 
 
 
