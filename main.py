@@ -1,17 +1,21 @@
-from fastapi import FastAPI, Depends, HTTPException, Body, UploadFile, Security, File
+from fastapi import FastAPI, Depends, HTTPException, Body, UploadFile, Security, File, Header
 from fastapi.security.api_key import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Annotated, Union, List, Dict
 import time
 import os
-# from dotenv import load_dotenv
+from dotenv import load_dotenv
 from openai import OpenAI
 import json
+from datetime import datetime, timedelta
+
+
+from maya_functions import MayaCalendar
 
 
 ###################################################### GENERAL CONFIG ###########################################################
-# load_dotenv()
+load_dotenv()
 
 
 # FastAPI app initialization
@@ -30,11 +34,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+class Headers(BaseModel):
+    Authorization: str
+    user_token: str
 
 
 # Load API key from environment variable
 api_key = os.getenv('API_KEY')
 api_key_header = APIKeyHeader(name="Authorization", auto_error=False)
+user_token_header = APIKeyHeader(name="User", auto_error=False)
+user = None
 
 # Initialize OpenAI client with API key
 openai_client = OpenAI(api_key=os.getenv('OPENAI_KEY'))
@@ -44,12 +53,19 @@ onboarding_assistant_id = os.getenv('ONBOARDING_ASSISTANT_ID')
 regular_assistant_id = os.getenv('REGULAR_ASSISTANT_ID')
 
 # Authentication function
-async def is_authenticated(api_key_header: str = Security(api_key_header)) -> bool:
+async def is_authenticated(api_key_header: str = Security(api_key_header), user_token_header: str = Security(user_token_header)) -> bool:
     if not api_key_header == os.getenv("API_KEY"):
         raise HTTPException(
             status_code=401, 
             detail="Incorrect Authentication credentials",
         )
+    if user_token_header is None:
+        raise HTTPException(
+            status_code=401, 
+            detail="User Token is misisng",
+        )
+    global user
+    user = user_token_header
     return True   
 
 
@@ -62,13 +78,50 @@ async def is_authenticated(api_key_header: str = Security(api_key_header)) -> bo
 
 # Functions
 class Functions():
+
     def SetReminder(self, task, date, email):
         print(f"SetReminder --> task: {task}, date: {date}, email: {email}")
         return True
 
-    def SetupMeeting(self, agenda, invitee_email, date):
-        print(f"SetupMeeting --> agenda: {agenda}, invitee_email: {invitee_email}, date: {date}")
-        return True   
+    def GetCalendarEvents(self, when):
+        try:
+            response = MayaCalendar(token=user).get_events(when=when)
+        except Exception as e:
+            print(e)
+            return 'something went wring when getting calendar events'
+        return response
+
+    def CreateCalendarEvent(self,title,from_date,duration='30m',invitees=None,description=None):
+        def add_duration(start_date_time, duration):
+            # Parse the start date and time
+            start_datetime = datetime.fromisoformat(start_date_time)
+            
+            # Extract the duration value and unit (assuming duration format like '1h', '30m')
+            duration_value = int(duration[:-1])
+            duration_unit = duration[-1]
+            
+            # Calculate the end date and time based on the duration
+            if duration_unit == 'h':
+                end_datetime = start_datetime + timedelta(hours=duration_value)
+            elif duration_unit == 'm':
+                end_datetime = start_datetime + timedelta(minutes=duration_value)
+            else:
+                raise ValueError("Invalid duration unit. Only 'h' (hours) and 'm' (minutes) are supported.")
+            
+            return end_datetime.isoformat()
+        try:
+            response =  MayaCalendar(token=user).post_events(title=title,from_date=from_date,to_date=add_duration(from_date, duration),invitees=invitees,description=description)
+            print(response)
+        except Exception as e:
+            print(e)
+            return 'something went wrong when creating calendar event'
+        return response
+        
+
+
+    # def SetupMeeting(self, agenda, invitee_email, date):
+    #     print(f"SetupMeeting --> agenda: {agenda}, invitee_email: {invitee_email}, date: {date}")
+    #     return True   
 
     def Shop(self, item, details, pricecap, website):
         print(f"Shopping --> item: {item}, details: {details}, pricecap: {pricecap}, website: {website}")
