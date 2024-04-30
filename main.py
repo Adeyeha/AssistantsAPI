@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from typing import Annotated, Union, List, Dict
 import time
 import os
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 from openai import OpenAI
 import json
 from datetime import datetime, timedelta
@@ -15,7 +15,7 @@ from maya_functions import MayaCalendar
 
 
 ###################################################### GENERAL CONFIG ###########################################################
-load_dotenv()
+# load_dotenv()
 
 
 # FastAPI app initialization
@@ -23,7 +23,9 @@ app = FastAPI()
 
 origins = [
     "http://localhost",
-    "http://maya-ai.azurewebsites.net"
+    "https://maya-ai.azurewebsites.net",
+    "https://maya-ai-service.azurewebsites.net"
+    
 ]
 
 app.add_middleware(
@@ -34,15 +36,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-class Headers(BaseModel):
-    Authorization: str
-    user_token: str
-
-
 # Load API key from environment variable
 api_key = os.getenv('API_KEY')
-api_key_header = APIKeyHeader(name="Authorization", auto_error=False)
-user_token_header = APIKeyHeader(name="User", auto_error=False)
+user_token_header = APIKeyHeader(name="User", auto_error=False, scheme_name="User")
+api_key_header = APIKeyHeader(name="Authorization", auto_error=False, scheme_name="Authorization")
 user = None
 
 # Initialize OpenAI client with API key

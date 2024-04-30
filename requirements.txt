@@ -1,6 +1,6 @@
 openai
 beautifulsoup4
-streamlit
+#streamlit
 pdfkit
 python-dotenv
 python-jose
